@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LUCE vs OMBRA — Battle Overlay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html, body{ width:100%; height:100%; overflow:hidden; background:#050308; }
+  body{
+    font-family:'Inter', sans-serif;
+    color:#f4f1ea;
+  }
+
+  /* ============ CANVAS — ambiente dinamico, particelle, fulmine centrale ============ */
+  #bgCanvas{
+    position:fixed; inset:0;
+    width:100%; height:100%;
+    z-index:0;
+  }
+
+  /* ============ SAGOME DI SFONDO ============ */
+  .bg-figure{
+    position:fixed;
+    bottom:0;
+    height:78vh;
+    width:auto;
+    z-index:1;
+    opacity:0.16;
+    filter:drop-shadow(0 0 40px rgba(0,0,0,.6));
+    transition:opacity .6s ease;
+    pointer-events:none;
+  }
+  .bg-figure-luce{ left:-2vw; }
+  .bg-figure-ombra{ right:-2vw; }
+
+  /* ============ WRAPPER (per lo screen-shake) ============ */
+  #shakeWrap{
+    position:relative;
+    width:100%; height:100%;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:30px 16px;
+    z-index:1;
+  }
+
+  /* ============ OBIETTIVO COMUNE (top) ============ */
+  .goal-wrap{
+    position:absolute;
+    top:22px; left:50%;
+    transform:translateX(-50%);
+    width:min(560px, 92%);
+    text-align:center;
+    z-index:6;
+  }
+  .goal-label{
+    font-family:'Inter', sans-serif;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:3px;
+    color:rgba(244,241,234,0.55);
+    margin-bottom:6px;
+    text-transform:uppercase;
+  }
+  .goal-track{
+    position:relative;
+    height:8px;
+    border-radius:8px;
+    background:rgba(255,255,255,0.08);
+    overflow:hidden;
+    box-shadow:inset 0 0 4px rgba(0,0,0,.6);
+  }
+  .goal-fill{
+    position:absolute; inset:0 auto 0 0;
+    width:0%;
+    border-radius:8px;
+    background:linear-gradient(90deg, #ffd166, #c77dff);
+    transition:width .6s cubic-bezier(.22,.9,.32,1);
+    box-shadow:0 0 12px rgba(255,209,102,0.6);
+  }
+  .goal-target{
+    font-family:'Bebas Neue', sans-serif;
+    font-size:13px;
+    letter-spacing:2px;
+    color:rgba(244,241,234,0.65);
+    margin-top:5px;
+  }
+
+  /* ============ TITOLO CENTRALE ============ */
+  .banner{
+    position:relative;
+    z-index:5;
+    text-align:center;
+    margin-bottom:38px;
+    margin-top:26px;
+  }
+  .banner .eyebrow{
+    font-family:'Bebas Neue', sans-serif;
+    font-size:clamp(24px,5vw,40px);
+    letter-spacing:5px;
+    background:linear-gradient(90deg, #ffd166, #f4f1ea 50%, #c77dff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 24px rgba(199,125,255,.35));
+  }
+  .banner .eyebrow-en{
+    font-family:'Inter', sans-serif;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:3px;
+    color:rgba(244,241,234,0.4);
+    margin-top:4px;
+    text-transform:uppercase;
+  }
+
+  /* ============ BATTLE ROW ============ */
+  .battle-row{
+    position:relative;
+    z-index:5;
+    width:100%;
+    max-width:920px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:8px;
+  }
+
+  .side{ display:flex; flex-direction:column; align-items:center; width:200px; gap:8px; position:relative; }
+
+  .aura{
+    position:absolute;
+    width:180px; height:180px;
+    border-radius:50%;
+    top:50%; left:50%;
+    transform:translate(-50%,-58%);
+    pointer-events:none;
+    opacity:0.5;
+    filter:blur(2px);
+    transition:opacity .4s, transform .4s;
+  }
+  .side.luce .aura{ background:radial-gradient(circle, rgba(255,209,102,0.55), transparent 70%); }
+  .side.ombra .aura{ background:radial-gradient(circle, rgba(199,125,255,0.55), transparent 70%); }
+
+  .avatar-ring{
+    width:128px; height:128px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+    transition:transform .2s cubic-bezier(.3,1.6,.5,1);
+  }
+  .side.luce .avatar-ring{
+    background:radial-gradient(circle at 34% 30%, #fff6dd 0%, #ffd166 42%, #a8650a 100%);
+    box-shadow:0 0 0 3px rgba(255,209,102,.3), 0 0 50px 12px rgba(255,183,3,.5), inset 0 0 26px rgba(0,0,0,.3);
+  }
+  .side.ombra .avatar-ring{
+    background:radial-gradient(circle at 34% 30%, #ecdaff 0%, #9b3dff 42%, #260a47 100%);
+    box-shadow:0 0 0 3px rgba(199,125,255,.3), 0 0 50px 12px rgba(139,29,255,.5), inset 0 0 26px rgba(0,0,0,.4);
+  }
+  .avatar-ring svg{ width:78px; height:78px; filter:drop-shadow(0 2px 8px rgba(0,0,0,.5)); display:block; }
+  .avatar-ring.attack-luce{ animation: lungeLuce .45s cubic-bezier(.2,1.4,.4,1); }
+  .avatar-ring.attack-ombra{ animation: lungeOmbra .45s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes lungeLuce{ 0%{transform:translateX(0) scale(1);} 38%{transform:translateX(22px) scale(1.22) rotate(-4deg);} 100%{transform:translateX(0) scale(1);} }
+  @keyframes lungeOmbra{ 0%{transform:translateX(0) scale(1);} 38%{transform:translateX(-22px) scale(1.22) rotate(4deg);} 100%{transform:translateX(0) scale(1);} }
+
+  .orbit-dot{
+    position:absolute; top:50%; left:50%; width:5px; height:5px; border-radius:50%;
+    margin:-2.5px 0 0 -2.5px; opacity:0; transition:opacity .4s; pointer-events:none;
+  }
+  .avatar-ring.ascending .orbit-dot{ opacity:1; }
+  .side.luce .orbit-dot{ background:#fff3d0; box-shadow:0 0 8px 2px rgba(255,209,102,.9); }
+  .side.ombra .orbit-dot{ background:#ecdaff; box-shadow:0 0 8px 2px rgba(199,125,255,.9); }
+  .orbit-dot.dot1{ animation: orbit 2.2s linear infinite; }
+  .orbit-dot.dot2{ animation: orbit 2.2s linear infinite; animation-delay:-0.73s; }
+  .orbit-dot.dot3{ animation: orbit 2.2s linear infinite; animation-delay:-1.46s; }
+  @keyframes orbit{
+    from{ transform: rotate(0deg) translateX(72px) rotate(0deg); }
+    to{ transform: rotate(360deg) translateX(72px) rotate(-360deg); }
+  }
+
+  .combo-ring{
+    position:absolute; inset:-8px;
+    border-radius:50%;
+    border:3px solid transparent;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .3s;
+  }
+  .combo-ring.show{ opacity:1; }
+  .side.luce .combo-ring{ border-color:#ffe8a3; box-shadow:0 0 18px rgba(255,209,102,.7); }
+  .side.ombra .combo-ring{ border-color:#e0c3ff; box-shadow:0 0 18px rgba(199,125,255,.7); }
+
+  .team-name{ font-family:'Bebas Neue', sans-serif; font-size:26px; letter-spacing:4px; }
+  .team-en{
+    display:block;
+    font-family:'Inter', sans-serif;
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:2px;
+    opacity:0.4;
+    margin-top:-2px;
+  }
+  .side.luce .team-name{ color:#ffd166; text-shadow:0 0 14px rgba(255,183,3,.7); }
+  .side.ombra .team-name{ color:#c77dff; text-shadow:0 0 14px rgba(139,29,255,.7); }
+
+  .score{ font-family:'Bebas Neue', sans-serif; font-size:34px; color:#f4f1ea; font-variant-numeric:tabular-nums; line-height:1; }
+  .combo-label{
+    font-family:'Inter', sans-serif; font-size:11px; font-weight:800; letter-spacing:1px;
+    padding:2px 8px; border-radius:20px; opacity:0; transform:scale(.8);
+    transition:opacity .25s, transform .25s;
+  }
+  .combo-label.show{ opacity:1; transform:scale(1); }
+  .side.luce .combo-label{ background:rgba(255,209,102,0.18); color:#ffd166; }
+  .side.ombra .combo-label{ background:rgba(199,125,255,0.18); color:#c77dff; }
+
+  .mvp{ font-size:10px; letter-spacing:1px; color:rgba(244,241,234,0.4); text-transform:uppercase; height:12px; }
+
+  /* ============ COMBATTENTI AL CENTRO ============ */
+  .fighters-stage{
+    position:relative;
+    width:100%;
+    height:74px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    gap:2px;
+    margin-bottom:6px;
+    overflow:visible;
+  }
+  .fighter-slot{ position:relative; }
+  .fighter-slot-mirror{ transform:scaleX(-1); }
+
+  .fighter{
+    display:block;
+    width:36px; height:42px;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));
+    animation: fighterIdle 1.6s ease-in-out infinite;
+    position:relative;
+    z-index:2;
+  }
+  .fighter-luce{ filter:drop-shadow(0 0 6px rgba(255,209,102,.6)); }
+  .fighter-ombra{ animation-delay:0.35s; filter:drop-shadow(0 0 6px rgba(199,125,255,.6)); }
+  @keyframes fighterIdle{
+    0%,100%{ transform:translateY(0); }
+    50%{ transform:translateY(-3px); }
+  }
+
+  /* livello 1-2: piccolo affondo — stessa animazione per entrambi:
+     il contenitore statico (fighter-slot-mirror) si occupa di far
+     puntare il movimento verso il centro per Ombra automaticamente */
+  .fighter.strike-jab{ animation: jab .34s cubic-bezier(.2,1.5,.4,1); }
+  @keyframes jab{ 0%{transform:translateX(0) rotate(0);} 45%{transform:translateX(10px) rotate(-14deg);} 100%{transform:translateX(0) rotate(0);} }
+
+  /* livello 3-4: salto vero, si stacca da terra */
+  .fighter.strike-leap{ animation: leap .52s cubic-bezier(.25,1.4,.35,1); }
+  @keyframes leap{
+    0%{ transform:translate(0,0) rotate(0); }
+    35%{ transform:translate(24px,-30px) rotate(-30deg); }
+    60%{ transform:translate(40px,-6px) rotate(10deg); }
+    100%{ transform:translate(0,0) rotate(0); }
+  }
+
+  /* livello 5-6: volo vero, attraversa il centro fin quasi dall'altra parte */
+  .fighter.strike-fly{ animation: fly .8s cubic-bezier(.22,1.5,.3,1); z-index:8; }
+  @keyframes fly{
+    0%{ transform:translate(0,0) rotate(0) scale(1); }
+    30%{ transform:translate(30px,-50px) rotate(-60deg) scale(1.15); }
+    55%{ transform:translate(72px,-14px) rotate(180deg) scale(1.15); }
+    75%{ transform:translate(40px,4px) rotate(280deg) scale(1.05); }
+    100%{ transform:translate(0,0) rotate(360deg) scale(1); }
+  }
+
+  .fighter.hit{ animation: hitReaction .3s ease; }
+  .fighter.hit-big{ animation: hitReactionBig .5s ease; }
+  @keyframes hitReaction{
+    0%{ filter:brightness(1); }
+    30%{ filter:brightness(2.6); transform:translateX(-4px) rotate(6deg); }
+    100%{ filter:brightness(1); }
+  }
+  @keyframes hitReactionBig{
+    0%{ filter:brightness(1); }
+    25%{ filter:brightness(3.2); transform:translateX(-18px) rotate(-24deg); }
+    60%{ transform:translateX(6px) rotate(8deg); }
+    100%{ filter:brightness(1); transform:translateX(0) rotate(0); }
+  }
+
+  /* ============ ARENA CENTRALE ============ */
+  .rope-wrap{ flex:1; margin:0 6px 24px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .rope-track{
+    position:relative; width:100%; height:16px; border-radius:12px;
+    background:linear-gradient(90deg, rgba(255,183,3,.15), rgba(244,241,234,.08), rgba(139,29,255,.15));
+    box-shadow:inset 0 0 8px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.06);
+  }
+  .rope-fill{
+    position:absolute; top:0; bottom:0; left:50%; width:0%; border-radius:12px;
+    transition:left .5s cubic-bezier(.22,.9,.32,1), width .5s cubic-bezier(.22,.9,.32,1), background .3s;
+  }
+  .marker{
+    position:absolute; top:50%; left:50%; width:26px; height:26px; border-radius:50%;
+    background:radial-gradient(circle, #fffef2, #ffd166 65%, #a8650a 100%);
+    transform:translate(-50%,-50%);
+    box-shadow:0 0 22px 7px rgba(255,209,102,.8), 0 0 0 3px rgba(255,255,255,.15);
+    transition:left .5s cubic-bezier(.22,.9,.32,1);
+    z-index:3;
+  }
+  .rope-labels{ display:flex; justify-content:space-between; width:100%; font-size:10px; letter-spacing:3px; text-transform:uppercase; color:rgba(244,241,234,.35); }
+
+  /* ============ TOASTS ============ */
+  .toast-layer{ position:fixed; inset:0; pointer-events:none; z-index:7; }
+  .toast{
+    position:absolute; bottom:38%;
+    display:flex; align-items:center; gap:8px; padding:8px 16px; border-radius:999px;
+    background:rgba(10,6,16,.72); backdrop-filter:blur(6px);
+    font-size:13px; font-weight:700; color:#f4f1ea; white-space:nowrap;
+    animation:toast-up 2.3s ease forwards; border:1px solid rgba(255,255,255,.12);
+  }
+  .toast.luce{ left:3%; border-color:rgba(255,183,3,.4); }
+  .toast.ombra{ right:3%; border-color:rgba(139,29,255,.4); }
+  @keyframes toast-up{
+    0%{opacity:0; transform:translateY(14px);} 14%{opacity:1; transform:translateY(0);}
+    80%{opacity:1;} 100%{opacity:0; transform:translateY(-50px);}
+  }
+
+  /* ============ FEED ATTIVITÀ (ticker in basso) ============ */
+  .ticker{
+    position:fixed; bottom:0; left:0; right:0;
+    height:34px;
+    background:linear-gradient(90deg, rgba(8,5,12,.9), rgba(8,5,12,.7));
+    border-top:1px solid rgba(255,255,255,0.08);
+    overflow:hidden;
+    z-index:6;
+    display:flex; align-items:center;
+  }
+  .ticker-track{
+    display:flex; gap:34px; white-space:nowrap;
+    animation:scroll-left 18s linear infinite;
+    padding-left:100%;
+  }
+  .ticker-item{ font-size:12px; font-weight:600; color:rgba(244,241,234,.7); }
+  .ticker-item b{ color:#ffd166; }
+  .ticker-item.ombra-item b{ color:#c77dff; }
+  @keyframes scroll-left{ 0%{transform:translateX(0);} 100%{transform:translateX(-100%);} }
+
+  /* ============ FLASH (regali leggendari) ============ */
+  .flash{
+    position:fixed; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:20; mix-blend-mode:overlay;
+  }
+  .flash.go{ animation:flash-pop .5s ease; }
+  @keyframes flash-pop{ 0%{opacity:0;} 12%{opacity:.85;} 100%{opacity:0;} }
+
+  /* ============ BARRE CINEMATOGRAFICHE (momenti epici) ============ */
+  .letterbox-top, .letterbox-bottom{
+    position:fixed; left:0; right:0;
+    height:0;
+    background:#000;
+    z-index:24;
+    transition:height .5s cubic-bezier(.2,.9,.3,1);
+    pointer-events:none;
+  }
+  .letterbox-top{ top:0; }
+  .letterbox-bottom{ bottom:0; }
+  .cinematic .letterbox-top, .cinematic .letterbox-bottom{ height:9vh; }
+
+  /* ============ TIMER ============ */
+  .timer-wrap{
+    position:absolute; top:22px; right:20px;
+    text-align:center;
+    z-index:6;
+    padding:6px 16px;
+    background:rgba(8,5,12,.55);
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,0.1);
+  }
+  .timer-label{
+    font-family:'Inter', sans-serif; font-size:9px; font-weight:800;
+    letter-spacing:2px; color:rgba(244,241,234,.45);
+  }
+  .timer-value{
+    font-family:'Bebas Neue', sans-serif; font-size:24px; letter-spacing:2px;
+    color:#f4f1ea; font-variant-numeric:tabular-nums;
+    transition:color .3s;
+  }
+  .timer-wrap.urgent .timer-value{
+    color:#ff6b6b;
+    animation:timerPulse 0.6s ease-in-out infinite;
+  }
+  @keyframes timerPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.14); } }
+
+  /* ============ RIMONTA / COMEBACK ============ */
+  .comeback-banner{
+    position:fixed; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:12px;
+    font-family:'Bebas Neue', sans-serif;
+    font-size:22px;
+    letter-spacing:5px;
+    color:#0c0710;
+    transform:translateY(-100%);
+    transition:transform .45s cubic-bezier(.2,.9,.3,1);
+    z-index:23;
+  }
+  .comeback-banner.go{ transform:translateY(0); }
+  .comeback-banner.luce{ background:linear-gradient(90deg, #fff3d0, #ffd166); text-shadow:0 0 12px rgba(255,255,255,.5); }
+  .comeback-banner.ombra{ background:linear-gradient(90deg, #ecdaff, #c77dff); color:#160828; text-shadow:0 0 12px rgba(255,255,255,.4); }
+
+  /* ============ TEMPESTA ============ */
+  .storm-banner{
+    position:fixed; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:12px;
+    background:linear-gradient(90deg, rgba(20,30,60,.92), rgba(40,20,70,.92));
+    border-bottom:2px solid rgba(180,200,255,0.5);
+    font-family:'Bebas Neue', sans-serif;
+    font-size:20px;
+    letter-spacing:5px;
+    color:#eaf0ff;
+    text-shadow:0 0 18px rgba(180,200,255,0.8);
+    transform:translateY(-100%);
+    transition:transform .5s cubic-bezier(.2,.9,.3,1);
+    z-index:23;
+  }
+  .storm-banner.go{ transform:translateY(0); }
+
+  /* ============ CARD REGALO LEGGENDARIO ============ */
+  .legendary-card{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+    z-index:22;
+    opacity:0;
+  }
+  .legendary-card.go{ animation:legendaryPop 1.5s cubic-bezier(.2,1,.3,1) forwards; }
+  .legendary-inner{ text-align:center; }
+  .legendary-title{
+    font-family:'Bebas Neue', sans-serif;
+    font-size:clamp(30px,7vw,60px);
+    letter-spacing:5px;
+    background:linear-gradient(90deg, #fff3d0, #ffd166 30%, #f4f1ea 55%, #c77dff 80%, #ecdaff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:none;
+    filter:drop-shadow(0 0 30px rgba(255,209,102,.6));
+  }
+  .legendary-sub{
+    font-family:'Inter', sans-serif;
+    font-size:13px; font-weight:700; letter-spacing:6px;
+    color:rgba(244,241,234,.6); margin-top:6px;
+  }
+  @keyframes legendaryPop{
+    0%{ opacity:0; transform:scale(0.4) rotate(-3deg); }
+    14%{ opacity:1; transform:scale(1.12) rotate(1deg); }
+    24%{ transform:scale(1) rotate(0); }
+    78%{ opacity:1; }
+    100%{ opacity:0; transform:scale(1.3); }
+  }
+
+  /* ============ VICTORY / MILESTONE OVERLAY ============ */
+  .overlay-msg{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(3,2,6,.8); opacity:0; pointer-events:none; transition:opacity .5s; z-index:25;
+  }
+  .overlay-msg.show{ opacity:1; pointer-events:all; }
+  .overlay-msg h1{
+    font-family:'Bebas Neue', sans-serif; font-size:clamp(36px,7.5vw,64px); letter-spacing:7px;
+    text-align:center; text-shadow:0 0 44px currentColor;
+  }
+  .overlay-msg p{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:14px; letter-spacing:2px;
+    text-align:center; color:rgba(244,241,234,.75); margin-top:14px;
+  }
+  .recap-card{ padding:20px; }
+  .recap-stats{
+    display:flex; align-items:center; justify-content:center; gap:28px;
+    margin-top:34px;
+  }
+  .recap-col{ text-align:center; min-width:120px; }
+  .recap-team{ font-family:'Bebas Neue', sans-serif; font-size:18px; letter-spacing:4px; opacity:0.7; }
+  .recap-luce .recap-team{ color:#ffd166; }
+  .recap-ombra .recap-team{ color:#c77dff; }
+  .recap-score{ font-family:'Bebas Neue', sans-serif; font-size:44px; color:#f4f1ea; margin-top:2px; }
+  .recap-mvp{ font-family:'Inter', sans-serif; font-size:11px; color:rgba(244,241,234,.5); margin-top:6px; letter-spacing:1px; }
+  .recap-vs{ font-family:'Bebas Neue', sans-serif; font-size:20px; color:rgba(244,241,234,.3); letter-spacing:3px; }
+  .recap-hint{
+    font-family:'Inter', sans-serif; font-size:11px; font-weight:600; letter-spacing:1px;
+    text-align:center; color:rgba(244,241,234,.4); margin-top:30px;
+  }
+
+  /* ============ PANNELLO DI TEST ============ */
+  .control-panel{
+    position:fixed; top:52px; right:14px;
+    display:flex; flex-direction:column; gap:6px; padding:10px;
+    background:rgba(8,5,12,.94);
+    border:1px solid rgba(255,255,255,.12); border-radius:14px; z-index:50;
+    max-width:150px;
+  }
+  .control-panel.hidden{ display:none; }
+  .control-panel .group{ display:flex; gap:6px; }
+  .control-panel button{
+    font-family:'Inter', sans-serif; font-size:11px; font-weight:800; padding:7px 8px;
+    border-radius:8px; border:none; cursor:pointer; color:#fff; flex:1;
+  }
+  .btn-luce{ background:linear-gradient(135deg,#ffd166,#a8650a); color:#241300; }
+  .btn-ombra{ background:linear-gradient(135deg,#c77dff,#4a0d8f); }
+  .btn-reset{ background:#2a2530; color:#f4f1ea; }
+  .toggle-hint{ position:fixed; top:14px; left:14px; font-size:11px; color:rgba(244,241,234,.32); z-index:50; transition:opacity .3s; }
+  .toggle-hint.hidden{ opacity:0; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<svg id="bgFigureLuce" class="bg-figure bg-figure-luce" viewBox="0 0 200 500" preserveAspectRatio="xMinYMax meet">
+  <defs>
+    <linearGradient id="bgLuceGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffe9ad"/>
+      <stop offset="100%" stop-color="#a8650a"/>
+    </linearGradient>
+  </defs>
+  <!-- LEGIONARIO ROMANO -->
+  <!-- cimiero (cresta dell'elmo) -->
+  <path d="M70 20 Q100 4 130 20 L124 34 Q100 22 76 34 Z" fill="url(#bgLuceGrad)"/>
+  <!-- elmo -->
+  <path d="M72 40 C72 20 128 20 128 40 L130 66 C130 78 118 84 100 84 C82 84 70 78 70 66 Z" fill="url(#bgLuceGrad)"/>
+  <!-- paragnatidi -->
+  <path d="M72 60 L64 86 L78 90 L80 66 Z" fill="url(#bgLuceGrad)"/>
+  <path d="M128 60 L136 86 L122 90 L120 66 Z" fill="url(#bgLuceGrad)"/>
+  <!-- torace (lorica) -->
+  <path d="M78 90 Q100 82 122 90 L128 210 Q100 224 72 210 Z" fill="url(#bgLuceGrad)"/>
+  <line x1="80" y1="110" x2="120" y2="110" stroke="#7a4c08" stroke-width="3" opacity="0.5"/>
+  <line x1="80" y1="130" x2="120" y2="130" stroke="#7a4c08" stroke-width="3" opacity="0.5"/>
+  <line x1="80" y1="150" x2="120" y2="150" stroke="#7a4c08" stroke-width="3" opacity="0.5"/>
+  <!-- gonnellino di strisce -->
+  <path d="M75 208 L70 250 L82 250 L86 210 Z" fill="url(#bgLuceGrad)"/>
+  <path d="M92 210 L89 252 L101 252 L104 210 Z" fill="url(#bgLuceGrad)"/>
+  <path d="M110 210 L112 252 L124 252 L118 210 Z" fill="url(#bgLuceGrad)"/>
+  <!-- gambe -->
+  <path d="M82 250 L74 500 L96 500 L98 260 Z" fill="url(#bgLuceGrad)"/>
+  <path d="M108 260 L106 500 L128 500 L120 250 Z" fill="url(#bgLuceGrad)"/>
+  <!-- scudo (scutum) -->
+  <path d="M8 130 Q0 220 14 300 Q34 320 46 300 Q56 220 44 130 Q26 118 8 130 Z" fill="url(#bgLuceGrad)" opacity="0.92"/>
+  <circle cx="27" cy="212" r="14" fill="none" stroke="#7a4c08" stroke-width="3" opacity="0.6"/>
+  <!-- lancia (pilum) -->
+  <line x1="150" y1="30" x2="164" y2="280" stroke="url(#bgLuceGrad)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M150 30 L142 54 L158 54 Z" fill="url(#bgLuceGrad)"/>
+  <!-- braccio che regge la lancia -->
+  <path d="M122 110 L148 90" stroke="url(#bgLuceGrad)" stroke-width="13" stroke-linecap="round"/>
+  <!-- braccio che regge lo scudo -->
+  <path d="M78 110 L48 150" stroke="url(#bgLuceGrad)" stroke-width="13" stroke-linecap="round"/>
+</svg>
+
+<svg id="bgFigureOmbra" class="bg-figure bg-figure-ombra" viewBox="0 0 200 500" preserveAspectRatio="xMaxYMax meet">
+  <defs>
+    <linearGradient id="bgOmbraGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c294f0"/>
+      <stop offset="100%" stop-color="#180628"/>
+    </linearGradient>
+  </defs>
+  <!-- FIGURA OSCURA (medico della peste) -->
+  <!-- tesa del cappello -->
+  <ellipse cx="100" cy="58" rx="58" ry="14" fill="url(#bgOmbraGrad)"/>
+  <!-- cupola del cappello -->
+  <path d="M74 58 C74 24 126 24 126 58 Z" fill="url(#bgOmbraGrad)"/>
+  <!-- volto/cappuccio -->
+  <path d="M78 60 C78 90 86 108 100 108 C114 108 122 90 122 60 Z" fill="url(#bgOmbraGrad)"/>
+  <!-- becco lungo -->
+  <path d="M92 92 C88 112 88 128 100 138 C112 128 112 112 108 92 Z" fill="url(#bgOmbraGrad)"/>
+  <!-- occhi -->
+  <ellipse cx="89" cy="82" rx="6" ry="7" fill="#180628"/>
+  <ellipse cx="111" cy="82" rx="6" ry="7" fill="#180628"/>
+  <!-- mantello che si allarga verso il basso -->
+  <path d="M70 106 Q100 96 130 106 L168 340 Q100 372 32 340 Z" fill="url(#bgOmbraGrad)"/>
+  <path d="M60 200 Q100 190 140 200" stroke="#180628" stroke-width="2" opacity="0.35" fill="none"/>
+  <path d="M50 260 Q100 250 150 260" stroke="#180628" stroke-width="2" opacity="0.35" fill="none"/>
+  <!-- orlo frastagliato del mantello che tocca terra -->
+  <path d="M32 340 L20 500 L44 500 L54 344 Z" fill="url(#bgOmbraGrad)"/>
+  <path d="M74 344 L70 500 L94 500 L92 346 Z" fill="url(#bgOmbraGrad)"/>
+  <path d="M108 346 L110 500 L134 500 L128 344 Z" fill="url(#bgOmbraGrad)"/>
+  <path d="M146 344 L156 500 L180 500 L168 340 Z" fill="url(#bgOmbraGrad)"/>
+  <!-- bastone -->
+  <line x1="18" y1="150" x2="10" y2="380" stroke="url(#bgOmbraGrad)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M18 150 Q4 140 4 156" stroke="url(#bgOmbraGrad)" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- braccio che regge il bastone -->
+  <path d="M72 130 L26 158" stroke="url(#bgOmbraGrad)" stroke-width="13" stroke-linecap="round"/>
+</svg>
+<div class="letterbox-top"></div>
+<div class="letterbox-bottom"></div>
+<div class="flash" id="flash"></div>
+<div class="toggle-hint" id="toggleHint">Premi "T" per nascondere/mostrare i pulsanti di test</div>
+
+<div id="shakeWrap">
+
+  <div class="timer-wrap" id="timerWrap">
+    <div class="timer-label">ROUND</div>
+    <div class="timer-value" id="timerValue">5:00</div>
+  </div>
+
+  <div class="goal-wrap">
+    <div class="goal-label" id="goalLabel">OBIETTIVO COMUNE — 0 / 10.000</div>
+    <div class="goal-track"><div class="goal-fill" id="goalFill"></div></div>
+  </div>
+
+  <div class="banner">
+    <div class="eyebrow">DA CHE PARTE STAI OGGI?</div>
+    <div class="eyebrow-en">WHICH SIDE ARE YOU ON TODAY?</div>
+  </div>
+
+  <div class="battle-row">
+    <div class="side luce">
+      <div class="aura" id="auraLuce"></div>
+      <div class="avatar-ring" id="avatarLuce">
+        <div class="combo-ring" id="comboRingLuce"></div>
+        <div class="orbit-dot dot1"></div><div class="orbit-dot dot2"></div><div class="orbit-dot dot3"></div>
+        <svg viewBox="0 0 100 100" fill="none">
+          <g id="raysLuce" opacity="0.55">
+            <line x1="50" y1="2" x2="50" y2="16" stroke="#fff3d0" stroke-width="2"/>
+            <line x1="50" y1="84" x2="50" y2="98" stroke="#fff3d0" stroke-width="2"/>
+            <line x1="2" y1="50" x2="16" y2="50" stroke="#fff3d0" stroke-width="2"/>
+            <line x1="84" y1="50" x2="98" y2="50" stroke="#fff3d0" stroke-width="2"/>
+            <line x1="15" y1="15" x2="24" y2="24" stroke="#fff3d0" stroke-width="2"/>
+            <line x1="76" y1="76" x2="85" y2="85" stroke="#fff3d0" stroke-width="2"/>
+            <line x1="85" y1="15" x2="76" y2="24" stroke="#fff3d0" stroke-width="2"/>
+            <line x1="24" y1="76" x2="15" y2="85" stroke="#fff3d0" stroke-width="2"/>
+          </g>
+          <circle cx="50" cy="50" r="34" fill="none" stroke="#fff3d0" stroke-width="1.5" opacity="0.4"/>
+          <path d="M50 16 L58 38 L82 38 L62 52 L70 76 L50 62 L30 76 L38 52 L18 38 L42 38 Z" fill="#fff8e8"/>
+          <circle cx="50" cy="50" r="9" fill="#a8650a"/>
+        </svg>
+      </div>
+      <div class="team-name">LUCE<span class="team-en">LIGHT</span></div>
+      <div class="score" id="scoreLuce">0</div>
+      <div class="combo-label" id="comboLuce">COMBO x1</div>
+      <div class="mvp" id="mvpLuce"></div>
+    </div>
+
+    <div class="rope-wrap">
+      <div class="fighters-stage">
+        <div class="fighter-slot">
+          <svg id="fighterLuce" class="fighter fighter-luce" viewBox="0 0 40 46">
+            <circle cx="20" cy="9" r="6" fill="#fff6dd"/>
+            <rect x="15" y="15" width="10" height="16" rx="3" fill="#ffd166"/>
+            <line x1="15" y1="19" x2="6" y2="14" stroke="#ffd166" stroke-width="3.4" stroke-linecap="round"/>
+            <line x1="25" y1="19" x2="30" y2="26" stroke="#ffd166" stroke-width="3.4" stroke-linecap="round"/>
+            <line x1="6" y1="14" x2="1" y2="4" stroke="#fff6dd" stroke-width="3" stroke-linecap="round"/>
+            <line x1="17" y1="31" x2="14" y2="45" stroke="#a8650a" stroke-width="3.6" stroke-linecap="round"/>
+            <line x1="23" y1="31" x2="27" y2="45" stroke="#a8650a" stroke-width="3.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="fighter-slot fighter-slot-mirror">
+          <svg id="fighterOmbra" class="fighter fighter-ombra" viewBox="0 0 40 46">
+            <circle cx="20" cy="9" r="6" fill="#ecdaff"/>
+            <rect x="15" y="15" width="10" height="16" rx="3" fill="#9b3dff"/>
+            <line x1="25" y1="19" x2="34" y2="14" stroke="#9b3dff" stroke-width="3.4" stroke-linecap="round"/>
+            <line x1="15" y1="19" x2="10" y2="26" stroke="#9b3dff" stroke-width="3.4" stroke-linecap="round"/>
+            <line x1="34" y1="14" x2="39" y2="4" stroke="#241333" stroke-width="3" stroke-linecap="round"/>
+            <line x1="23" y1="31" x2="26" y2="45" stroke="#4a0d8f" stroke-width="3.6" stroke-linecap="round"/>
+            <line x1="17" y1="31" x2="13" y2="45" stroke="#4a0d8f" stroke-width="3.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="rope-track">
+        <div class="rope-fill" id="ropeFill"></div>
+        <div class="marker" id="marker"></div>
+      </div>
+      <div class="rope-labels"><span>Luce</span><span>Ombra</span></div>
+    </div>
+
+    <div class="side ombra">
+      <div class="aura" id="auraOmbra"></div>
+      <div class="avatar-ring" id="avatarOmbra">
+        <div class="combo-ring" id="comboRingOmbra"></div>
+        <div class="orbit-dot dot1"></div><div class="orbit-dot dot2"></div><div class="orbit-dot dot3"></div>
+        <svg viewBox="0 0 100 100" fill="none">
+          <g id="tendrilsOmbra" opacity="0.5" stroke="#c77dff" stroke-width="2" fill="none">
+            <path d="M18 30 Q6 40 12 55"/>
+            <path d="M82 30 Q94 40 88 55"/>
+            <path d="M20 78 Q10 88 18 96"/>
+            <path d="M80 78 Q90 88 82 96"/>
+          </g>
+          <circle cx="50" cy="50" r="34" fill="none" stroke="#e3c9ff" stroke-width="1.5" opacity="0.4"/>
+          <path d="M50 14 C28 14 16 32 16 50 C16 68 28 82 50 92 C72 82 84 68 84 50 C84 32 72 14 50 14 Z" fill="#241333"/>
+          <ellipse cx="37" cy="48" rx="6.5" ry="8.5" fill="#e3c9ff"/>
+          <ellipse cx="63" cy="48" rx="6.5" ry="8.5" fill="#e3c9ff"/>
+          <path d="M28 70 Q50 82 72 70 Q50 78 28 70 Z" fill="#0f0619"/>
+        </svg>
+      </div>
+      <div class="team-name">OMBRA<span class="team-en">SHADOW</span></div>
+      <div class="score" id="scoreOmbra">0</div>
+      <div class="combo-label" id="comboOmbra">COMBO x1</div>
+      <div class="mvp" id="mvpOmbra"></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-layer" id="toastLayer"></div>
+
+<div class="ticker"><div class="ticker-track" id="tickerTrack"></div></div>
+
+<div class="storm-banner" id="stormBanner">⚡ TEMPESTA ⚡ &nbsp;·&nbsp; STORM ⚡</div>
+<div class="comeback-banner" id="comebackBanner"></div>
+
+<div class="legendary-card" id="legendaryCard">
+  <div class="legendary-inner">
+    <div class="legendary-title" id="legendaryTitle">REGALO LEGGENDARIO</div>
+    <div class="legendary-sub">LEGENDARY GIFT</div>
+  </div>
+</div>
+
+<div class="overlay-msg" id="overlayMsg">
+  <div class="recap-card">
+    <h1 id="overlayTitle">VITTORIA</h1>
+    <p id="overlaySub"></p>
+    <div class="recap-stats">
+      <div class="recap-col recap-luce">
+        <div class="recap-team">LUCE</div>
+        <div class="recap-score" id="recapScoreLuce">0</div>
+        <div class="recap-mvp" id="recapMvpLuce"></div>
+      </div>
+      <div class="recap-vs">VS</div>
+      <div class="recap-col recap-ombra">
+        <div class="recap-team">OMBRA</div>
+        <div class="recap-score" id="recapScoreOmbra">0</div>
+        <div class="recap-mvp" id="recapMvpOmbra"></div>
+      </div>
+    </div>
+    <div class="recap-hint">📸 Screenshot per condividere · Screenshot to share</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PANNELLO DI TEST — nascondilo (tasto T) quando colleghi i
+     regali veri tramite handleGiftEvent() dal connettore TikTok.
+     ============================================================ -->
+<div class="control-panel" id="controlPanel">
+  <div class="group">
+    <button class="btn-luce" onclick="simulateGift('luce','Dono',5)">1 · 5</button>
+    <button class="btn-ombra" onclick="simulateGift('ombra','Dono',5)">1 · 5</button>
+  </div>
+  <div class="group">
+    <button class="btn-luce" onclick="simulateGift('luce','Dono',25)">2 · 25</button>
+    <button class="btn-ombra" onclick="simulateGift('ombra','Dono',25)">2 · 25</button>
+  </div>
+  <div class="group">
+    <button class="btn-luce" onclick="simulateGift('luce','Dono',100)">3 · 100</button>
+    <button class="btn-ombra" onclick="simulateGift('ombra','Dono',100)">3 · 100</button>
+  </div>
+  <div class="group">
+    <button class="btn-luce" onclick="simulateGift('luce','Dono',350)">4 · 350</button>
+    <button class="btn-ombra" onclick="simulateGift('ombra','Dono',350)">4 · 350</button>
+  </div>
+  <div class="group">
+    <button class="btn-luce" onclick="simulateGift('luce','Dono',900)">5 · 900</button>
+    <button class="btn-ombra" onclick="simulateGift('ombra','Dono',900)">5 · 900</button>
+  </div>
+  <div class="group">
+    <button class="btn-luce" onclick="simulateGift('luce','Dono',3000)">6 · 3000</button>
+    <button class="btn-ombra" onclick="simulateGift('ombra','Dono',3000)">6 · 3000</button>
+  </div>
+  <button class="btn-reset" onclick="resetBattle()">↺ Reset totale</button>
+</div>
+
+<script>
+/* =========================================================================
+   STATO
+========================================================================= */
+/* =========================================================================
+   TEMPESTA — se arrivano piu' colpi grossi (livello 4+) ravvicinati,
+   la battaglia diventa cosi' intensa da scatenare una vera tempesta:
+   fulmini casuali su tutto lo schermo per qualche secondo.
+========================================================================= */
+let heatCount = 0;
+let heatWindowStart = 0;
+const HEAT_WINDOW_MS = 16000;
+const HEAT_TRIGGER = 3;
+
+function registerHeat(level){
+  if(level < 4) return;
+  const now = performance.now();
+  if(now - heatWindowStart > HEAT_WINDOW_MS){ heatWindowStart = now; heatCount = 0; }
+  heatCount++;
+  if(heatCount >= HEAT_TRIGGER){
+    heatCount = 0;
+    startStorm();
+  }
+}
+
+function startStorm(){
+  stormUntil = performance.now() + 7000;
+  els.stormBanner.classList.add('go');
+  clearTimeout(startStorm._t);
+  startStorm._t = setTimeout(() => els.stormBanner.classList.remove('go'), 2200);
+}
+
+let scoreLuce = 0, scoreOmbra = 0;
+let comboTeam = null, comboCount = 0, comboTimer = null;
+let mvp = { luce:{name:null,value:0}, ombra:{name:null,value:0} };
+const VICTORY_THRESHOLD = 8000;
+let goalTier = 0;
+const GOAL_STEPS = [15000, 40000, 100000, 250000];
+
+const closingLines = [
+  { it:"ANCORA UNA VOLTA, HAI SCELTO.", en:"ONCE AGAIN, YOU CHOSE." },
+  { it:"LA DISCIPLINA VINCE ANCORA.", en:"DISCIPLINE WINS AGAIN." },
+  { it:"DOMANI RICOMINCIA LA GUERRA.", en:"TOMORROW THE WAR BEGINS AGAIN." },
+  { it:"UNA SCELTA ALLA VOLTA.", en:"ONE CHOICE AT A TIME." }
+];
+const testNames = ["marco.94","giulia_x","_ale.fit","robertoo","sara.k","teoval6","mattia__","noemi.94"];
+const giftLabels = {
+  'Rosa': {it:'Rosa', en:'Rose'},
+  'Leone': {it:'Leone', en:'Lion'},
+  'Universo': {it:'Universo', en:'Universe'}
+};
+
+/* =========================================================================
+   SISTEMA A LIVELLI — QUALSIASI regalo TikTok funziona: non serve
+   riconoscere il nome, basta il valore in coin. Ogni regalo viene
+   automaticamente classificato in uno di 6 livelli, e l'effetto
+   cresce in intensità man mano che si sale — un vero crescendo.
+========================================================================= */
+const TIERS = [
+  { level:1, min:1,    max:9,     label:'Piccolo',    labelEn:'Small' },
+  { level:2, min:10,   max:49,    label:'Medio',       labelEn:'Medium' },
+  { level:3, min:50,   max:199,   label:'Forte',        labelEn:'Strong' },
+  { level:4, min:200,  max:499,   label:'Potente',      labelEn:'Powerful' },
+  { level:5, min:500,  max:1999,  label:'Leggendario',  labelEn:'Legendary' },
+  { level:6, min:2000, max:Infinity, label:'Mitico',    labelEn:'Mythic' },
+];
+function getTier(coinValue){
+  return TIERS.find(t => coinValue >= t.min && coinValue <= t.max) || TIERS[0];
+}
+
+const els = {
+  timerWrap: document.getElementById('timerWrap'),
+  timerValue: document.getElementById('timerValue'),
+  comebackBanner: document.getElementById('comebackBanner'),
+  recapScoreLuce: document.getElementById('recapScoreLuce'),
+  recapScoreOmbra: document.getElementById('recapScoreOmbra'),
+  recapMvpLuce: document.getElementById('recapMvpLuce'),
+  recapMvpOmbra: document.getElementById('recapMvpOmbra'),
+  scoreLuce: document.getElementById('scoreLuce'),
+  scoreOmbra: document.getElementById('scoreOmbra'),
+  ropeFill: document.getElementById('ropeFill'),
+  marker: document.getElementById('marker'),
+  toastLayer: document.getElementById('toastLayer'),
+  avatarLuce: document.getElementById('avatarLuce'),
+  avatarOmbra: document.getElementById('avatarOmbra'),
+  fighterLuce: document.getElementById('fighterLuce'),
+  fighterOmbra: document.getElementById('fighterOmbra'),
+  bgFigureLuce: document.getElementById('bgFigureLuce'),
+  bgFigureOmbra: document.getElementById('bgFigureOmbra'),
+  auraLuce: document.getElementById('auraLuce'),
+  auraOmbra: document.getElementById('auraOmbra'),
+  comboLuce: document.getElementById('comboLuce'),
+  comboOmbra: document.getElementById('comboOmbra'),
+  comboRingLuce: document.getElementById('comboRingLuce'),
+  comboRingOmbra: document.getElementById('comboRingOmbra'),
+  mvpLuce: document.getElementById('mvpLuce'),
+  mvpOmbra: document.getElementById('mvpOmbra'),
+  overlayMsg: document.getElementById('overlayMsg'),
+  overlayTitle: document.getElementById('overlayTitle'),
+  overlaySub: document.getElementById('overlaySub'),
+  legendaryCard: document.getElementById('legendaryCard'),
+  legendaryTitle: document.getElementById('legendaryTitle'),
+  stormBanner: document.getElementById('stormBanner'),
+  controlPanel: document.getElementById('controlPanel'),
+  toggleHint: document.getElementById('toggleHint'),
+  goalFill: document.getElementById('goalFill'),
+  goalLabel: document.getElementById('goalLabel'),
+  flash: document.getElementById('flash'),
+  shakeWrap: document.getElementById('shakeWrap'),
+  tickerTrack: document.getElementById('tickerTrack'),
+};
+
+/* =========================================================================
+   ASSEGNAZIONE SQUADRA (esempio per quando colleghiamo i regali VERI)
+   ---------------------------------------------------------------------
+   Il tipo di regalo (Rosa, Leone, Universo...) decide solo QUANTI PUNTI
+   vale — non decide la squadra. La squadra è scelta dallo spettatore UNA
+   VOLTA, di solito scrivendo "LUCE" o "OMBRA" in chat. Da quel momento,
+   ogni regalo che manda viene contato per quella squadra.
+
+   Questa mappa "chi ha scelto cosa" andrà popolata dal connettore TikTok
+   reale (ogni volta che arriva un commento, si controlla se contiene
+   "luce" o "ombra" e si registra lo username). Qui è solo la struttura
+   di esempio, pronta da collegare.
+========================================================================= */
+const teamAssignments = {}; // es: { "marco.94": "luce", "giulia_x": "ombra" }
+
+function assignTeamFromComment(username, commentText){
+  const text = commentText.toLowerCase();
+  if(text.includes('luce')) teamAssignments[username] = 'luce';
+  else if(text.includes('ombra')) teamAssignments[username] = 'ombra';
+}
+
+// Quando arriva un regalo vero, il connettore userà questa funzione:
+// la squadra si legge dalla mappa sopra, in base a CHI l'ha mandato —
+// non dal tipo di regalo. Se lo spettatore non ha mai scelto un lato,
+// va assegnato un default (qui: a caso, ma si può cambiare).
+function handleRealGift(username, giftName, coinValue){
+  let team = teamAssignments[username];
+  if(!team){
+    team = Math.random() < 0.5 ? 'luce' : 'ombra'; // default se non ha scelto
+    teamAssignments[username] = team;
+  }
+  handleGiftEvent(team, coinValue, giftName, username);
+}
+
+/* =========================================================================
+   FUNZIONE CHIAVE — chiamata sia dai pulsanti di test (simulateGift) sia,
+   in produzione, da handleRealGift() sopra quando arriva un regalo vero.
+========================================================================= */
+function simulateGift(team, giftName, coinValue){
+  const user = testNames[Math.floor(Math.random()*testNames.length)];
+  handleGiftEvent(team, coinValue, giftName, user);
+}
+
+function handleGiftEvent(team, coinValue, giftName, username){
+  username = username || 'spettatore';
+
+  if(team === 'luce'){
+    scoreLuce += coinValue;
+    attackAnim(els.avatarLuce, 'attack-luce');
+    updateMVP('luce', username, coinValue);
+  } else {
+    scoreOmbra += coinValue;
+    attackAnim(els.avatarOmbra, 'attack-ombra');
+    updateMVP('ombra', username, coinValue);
+  }
+
+  updateCombo(team);
+  showToast(team, giftName, coinValue);
+  addTickerItem(team, username, giftName, coinValue);
+  spawnProjectile(team, coinValue);
+  fighterClash(team, getTier(coinValue).level);
+
+  updateBar();
+  checkGoal();
+  checkVictory();
+}
+
+function attackAnim(el, cls){
+  el.classList.remove('attack-luce','attack-ombra');
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
+function fighterClash(team, level){
+  const attacker = team === 'luce' ? els.fighterLuce : els.fighterOmbra;
+  const defender = team === 'luce' ? els.fighterOmbra : els.fighterLuce;
+
+  const strikeCls = level >= 5 ? 'strike-fly' : (level >= 3 ? 'strike-leap' : 'strike-jab');
+  const hitCls = level >= 5 ? 'hit-big' : 'hit';
+  const hitDelay = level >= 5 ? 340 : (level >= 3 ? 220 : 140);
+
+  attacker.classList.remove('strike-jab','strike-leap','strike-fly');
+  void attacker.offsetWidth;
+  attacker.classList.add(strikeCls);
+
+  setTimeout(() => {
+    defender.classList.remove('hit','hit-big');
+    void defender.offsetWidth;
+    defender.classList.add(hitCls);
+  }, hitDelay);
+}
+
+/* ---------- combo ---------- */
+function updateCombo(team){
+  if(comboTeam === team){ comboCount++; } else { comboTeam = team; comboCount = 1; }
+  clearTimeout(comboTimer);
+  comboTimer = setTimeout(() => { comboCount = 0; comboTeam = null; renderCombo(); }, 4000);
+  renderCombo();
+}
+function renderCombo(){
+  [['luce',els.comboLuce,els.comboRingLuce],['ombra',els.comboOmbra,els.comboRingOmbra]].forEach(([team,label,ring])=>{
+    if(comboTeam === team && comboCount > 1){
+      label.textContent = 'COMBO x' + comboCount;
+      label.classList.add('show');
+      ring.classList.add('show');
+    } else {
+      label.classList.remove('show');
+      ring.classList.remove('show');
+    }
+  });
+}
+
+/* ---------- mvp ---------- */
+function updateMVP(team, username, value){
+  if(value > mvp[team].value){
+    mvp[team] = { name: username, value };
+    (team === 'luce' ? els.mvpLuce : els.mvpOmbra).textContent = '★ ' + username;
+  }
+}
+
+/* ---------- barra centrale ---------- */
+function updateBar(){
+  els.scoreLuce.textContent = scoreLuce.toLocaleString('it-IT');
+  els.scoreOmbra.textContent = scoreOmbra.toLocaleString('it-IT');
+
+  const total = scoreLuce + scoreOmbra;
+  const pct = total > 0 ? (scoreLuce/total)*100 : 50;
+  els.marker.style.left = pct + '%';
+
+  if(pct >= 50){
+    els.ropeFill.style.left = '50%';
+    els.ropeFill.style.width = (pct-50) + '%';
+    els.ropeFill.style.background = 'linear-gradient(90deg, #ffd166, #fff3d0)';
+  } else {
+    els.ropeFill.style.left = pct + '%';
+    els.ropeFill.style.width = (50-pct) + '%';
+    els.ropeFill.style.background = 'linear-gradient(90deg, #c77dff, #e3c9ff)';
+  }
+
+  // le aure si gonfiano leggermente dal lato dominante
+  const auraScaleLuce = 0.85 + Math.max(0, (pct-50)/50) * 0.5;
+  const auraScaleOmbra = 0.85 + Math.max(0, (50-pct)/50) * 0.5;
+  els.auraLuce.style.transform = `translate(-50%,-58%) scale(${auraScaleLuce})`;
+  els.auraOmbra.style.transform = `translate(-50%,-58%) scale(${auraScaleOmbra})`;
+
+  // ascensione: se una squadra domina a lungo (>70%), il suo avatar orbita di scintille
+  els.avatarLuce.classList.toggle('ascending', pct >= 70);
+  els.avatarOmbra.classList.toggle('ascending', pct <= 30);
+
+  // le sagome di sfondo si illuminano dal lato che sta vincendo
+  els.bgFigureLuce.style.opacity = 0.12 + Math.max(0, (pct-50)/50) * 0.26;
+  els.bgFigureOmbra.style.opacity = 0.12 + Math.max(0, (50-pct)/50) * 0.26;
+
+  bgDominance = pct/100; // usato dal canvas
+  checkComeback(pct);
+}
+
+/* ---------- toast volanti ---------- */
+function showToast(team, giftName, value){
+  const t = document.createElement('div');
+  t.className = 'toast ' + team;
+  t.textContent = `+${value.toLocaleString('it-IT')} · ${giftName}`;
+  t.style.bottom = (28 + Math.random()*18) + '%';
+  els.toastLayer.appendChild(t);
+  setTimeout(() => t.remove(), 2400);
+}
+
+/* ---------- feed attività (ticker) ---------- */
+function addTickerItem(team, username, giftName, value){
+  const span = document.createElement('span');
+  span.className = 'ticker-item' + (team === 'ombra' ? ' ombra-item' : '');
+  const g = giftLabels[giftName] || {it:giftName, en:giftName};
+  const teamIt = team === 'luce' ? 'Luce' : 'Ombra';
+  const teamEn = team === 'luce' ? 'Light' : 'Shadow';
+  span.innerHTML = `<b>${username}</b> ha inviato ${g.it} (+${value}) a ${teamIt}  ·  sent a ${g.en} to ${teamEn}`;
+  els.tickerTrack.appendChild(span);
+  while(els.tickerTrack.children.length > 14){ els.tickerTrack.removeChild(els.tickerTrack.firstChild); }
+}
+
+/* ---------- obiettivo comune ---------- */
+function checkGoal(){
+  const total = scoreLuce + scoreOmbra;
+  const target = GOAL_STEPS[Math.min(goalTier, GOAL_STEPS.length-1)];
+  const pct = Math.min(100, (total/target)*100);
+  els.goalFill.style.width = pct + '%';
+  els.goalLabel.textContent = `OBIETTIVO COMUNE / SHARED GOAL — ${total.toLocaleString('it-IT')} / ${target.toLocaleString('it-IT')}`;
+
+  if(total >= target){
+    goalTier++;
+    showOverlay('OBIETTIVO SBLOCCATO · GOAL UNLOCKED', 'Il pubblico ha unito le forze. Si continua.   /   The audience joined forces. The battle goes on.', '#ffd166', 1800);
+    flashScreen();
+    screenShake(10);
+  }
+}
+
+/* ---------- vittoria finale ---------- */
+let roundEnded = false;
+
+function checkVictory(){
+  if(scoreLuce >= VICTORY_THRESHOLD || scoreOmbra >= VICTORY_THRESHOLD){
+    endRound();
+  }
+}
+
+function endRound(){
+  if(roundEnded) return;
+  roundEnded = true;
+  clearInterval(timerInterval);
+
+  const winner = scoreLuce === scoreOmbra ? null : (scoreLuce > scoreOmbra ? 'LUCE' : 'OMBRA');
+  const winnerEn = winner === 'LUCE' ? 'LIGHT' : (winner === 'OMBRA' ? 'SHADOW' : '');
+  const color = winner === 'LUCE' ? '#ffd166' : (winner === 'OMBRA' ? '#c77dff' : '#f4f1ea');
+  const line = closingLines[Math.floor(Math.random()*closingLines.length)];
+  const title = winner ? (winner + ' VINCE  ·  ' + winnerEn + ' WINS') : 'PAREGGIO · DRAW';
+
+  els.recapScoreLuce.textContent = scoreLuce.toLocaleString('it-IT');
+  els.recapScoreOmbra.textContent = scoreOmbra.toLocaleString('it-IT');
+  els.recapMvpLuce.textContent = mvp.luce.name ? ('★ MVP: ' + mvp.luce.name) : '';
+  els.recapMvpOmbra.textContent = mvp.ombra.name ? ('★ MVP: ' + mvp.ombra.name) : '';
+
+  showOverlay(title, line.it + '   /   ' + line.en, color, 0);
+}
+
+function showOverlay(title, sub, color, autoHideMs){
+  els.overlayTitle.textContent = title;
+  els.overlayTitle.style.color = color;
+  els.overlaySub.textContent = sub;
+  els.overlayMsg.classList.add('show');
+  if(autoHideMs > 0){
+    setTimeout(() => els.overlayMsg.classList.remove('show'), autoHideMs);
+  }
+}
+
+/* =========================================================================
+   TIMER — round a tempo, stile "Match" nativo di TikTok (5 minuti).
+   Alla fine del tempo il round si chiude comunque, anche senza aver
+   raggiunto la soglia di vittoria — crea urgenza reale negli ultimi secondi.
+========================================================================= */
+const ROUND_SECONDS = 300;
+let timeRemaining = ROUND_SECONDS;
+let timerInterval = null;
+
+function updateTimerDisplay(){
+  const m = Math.floor(timeRemaining/60);
+  const s = timeRemaining%60;
+  els.timerValue.textContent = m + ':' + String(s).padStart(2,'0');
+  els.timerWrap.classList.toggle('urgent', timeRemaining <= 30 && timeRemaining > 0);
+}
+
+function startTimer(){
+  clearInterval(timerInterval);
+  timeRemaining = ROUND_SECONDS;
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    if(roundEnded) return;
+    timeRemaining--;
+    updateTimerDisplay();
+    if(timeRemaining <= 0){ endRound(); }
+  }, 1000);
+}
+
+/* =========================================================================
+   RIMONTA — se una squadra era in forte svantaggio (sotto il 25%) e poi
+   prende il sopravvento entro 15 secondi, scatta un banner dedicato.
+========================================================================= */
+const comebackWatch = { luceTrailingSince:0, ombraTrailingSince:0 };
+const COMEBACK_WINDOW = 15000;
+
+function checkComeback(pct){
+  const now = performance.now();
+  if(pct <= 25) comebackWatch.luceTrailingSince = now;
+  if(pct >= 75) comebackWatch.ombraTrailingSince = now;
+
+  if(pct >= 55 && comebackWatch.luceTrailingSince && (now - comebackWatch.luceTrailingSince) < COMEBACK_WINDOW){
+    triggerComeback('luce');
+    comebackWatch.luceTrailingSince = 0;
+  }
+  if(pct <= 45 && comebackWatch.ombraTrailingSince && (now - comebackWatch.ombraTrailingSince) < COMEBACK_WINDOW){
+    triggerComeback('ombra');
+    comebackWatch.ombraTrailingSince = 0;
+  }
+}
+
+function triggerComeback(team){
+  els.comebackBanner.className = 'comeback-banner go ' + team;
+  els.comebackBanner.innerHTML = team === 'luce' ? 'RIMONTA! · LUCE COMEBACK' : 'RIMONTA! · OMBRA COMEBACK';
+  screenShake(14);
+  triggerPunch(20);
+  flashScreen();
+  clearTimeout(triggerComeback._t);
+  triggerComeback._t = setTimeout(() => els.comebackBanner.classList.remove('go'), 2400);
+}
+
+function resetBattle(){
+  scoreLuce = 0; scoreOmbra = 0; goalTier = 0; roundEnded = false;
+  mvp = { luce:{name:null,value:0}, ombra:{name:null,value:0} };
+  els.mvpLuce.textContent = ''; els.mvpOmbra.textContent = '';
+  comboTeam = null; comboCount = 0; renderCombo();
+  comebackWatch.luceTrailingSince = 0; comebackWatch.ombraTrailingSince = 0;
+  els.comebackBanner.classList.remove('go');
+  updateBar(); checkGoal();
+  els.overlayMsg.classList.remove('show');
+  els.tickerTrack.innerHTML = '';
+  startTimer();
+}
+
+/* ---------- screen shake + camera punch ---------- */
+let shakeIntensity = 0;
+let punchBoost = 0;
+let hitstopUntil = 0;
+function screenShake(power){ shakeIntensity = Math.max(shakeIntensity, power); }
+function triggerPunch(amount){ punchBoost = Math.max(punchBoost, amount); }
+function triggerHitstop(ms){ hitstopUntil = Math.max(hitstopUntil, performance.now() + ms); }
+function flashScreen(){ els.flash.classList.remove('go'); void els.flash.offsetWidth; els.flash.classList.add('go'); }
+
+function shakeLoop(){
+  const dx = (Math.random()-0.5) * shakeIntensity;
+  const dy = (Math.random()-0.5) * shakeIntensity;
+  shakeIntensity *= 0.88;
+  if(shakeIntensity < 0.1) shakeIntensity = 0;
+
+  punchBoost *= 0.82;
+  if(punchBoost < 0.1) punchBoost = 0;
+  const scale = 1 + punchBoost*0.0035;
+
+  els.shakeWrap.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  requestAnimationFrame(shakeLoop);
+}
+shakeLoop();
+
+/* =========================================================================
+   CANVAS — ambiente dinamico + particelle + fulmine centrale + burst
+========================================================================= */
+const canvas = document.getElementById('bgCanvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+let bgDominance = 0.5; // 0 = tutto ombra, 1 = tutto luce
+let ambient = [];
+let bursts = [];
+let projectiles = [];
+let impactSparks = [];
+let shockwaves = [];
+let slashes = [];
+let stormUntil = 0;
+let stormNextStrike = 0;
+let stormBolts = [];
+
+function spawnStormBolt(){
+  const x = 40 + Math.random()*(W-80);
+  const segments = 10;
+  const points = [];
+  for(let i=0;i<=segments;i++){
+    const t = i/segments;
+    const jitter = (Math.random()-0.5) * 46;
+    points.push({ x: x + jitter*t*2, y: H*t });
+  }
+  stormBolts.push({ points, life:1, branchAt: Math.floor(segments*0.4) });
+
+  // impatto a terra: piccola onda + shake leggero, senza interrompere il flusso
+  const groundX = points[points.length-1].x;
+  spawnShock(groundX, H*0.92, '210,225,255', 90);
+  spawnSparks(groundX, H*0.92, '210,225,255', 14, 3);
+  screenShake(7);
+  flashScreen();
+}
+
+function drawStormBolts(speedMul){
+  stormBolts.forEach(b => {
+    if(speedMul > 0) b.life -= 0.06;
+    ctx.globalAlpha = Math.max(0, b.life);
+    ctx.strokeStyle = 'rgba(220,232,255,0.9)';
+    ctx.lineWidth = 2.4;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = 'rgba(180,200,255,0.9)';
+    ctx.beginPath();
+    b.points.forEach((p,i) => i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+    ctx.stroke();
+
+    // un ramo secondario per realismo
+    const branch = b.points[b.branchAt];
+    if(branch){
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(branch.x, branch.y);
+      ctx.lineTo(branch.x + 34, branch.y + 46);
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  });
+  stormBolts = stormBolts.filter(b => b.life > 0);
+}
+
+function spawnAmbient(){
+  const isLuce = Math.random() < bgDominance;
+  const windy = performance.now() < stormUntil;
+  ambient.push({
+    x: Math.random()*W,
+    y: H + 10,
+    r: 1.5 + Math.random()*3,
+    vy: (windy ? 0.7 : 0.3) + Math.random()*0.6,
+    vx: (Math.random()-0.5) * (windy ? 1.4 : 0.3),
+    life: 1,
+    color: isLuce ? '255,209,102' : '199,125,255'
+  });
+  if(ambient.length > 140) ambient.shift();
+}
+setInterval(spawnAmbient, 90);
+
+// ---------- COMBATTIMENTO: proiettile lanciato dall'avatar verso il centro ----------
+function spawnProjectile(team, value){
+  const tier = getTier(value);
+  const originX = team === 'luce' ? W*0.20 : W*0.80;
+  const originY = H*0.5;
+  const targetX = W*0.5;
+  const targetY = H*0.5;
+  const color = team === 'luce' ? '255,209,102' : '199,125,255';
+
+  // livello 1: troppo piccolo per un vero "attacco" — solo un piccolo sbuffo
+  if(tier.level === 1){
+    for(let i=0;i<4;i++){
+      const angle = Math.random()*Math.PI*2;
+      const speed = 0.4 + Math.random();
+      bursts.push({ x:originX, y:originY, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:1+Math.random()*1.5, life:1, color });
+    }
+    return;
+  }
+
+  const isMeteor = tier.level >= 5;
+
+  if(isMeteor){
+    projectiles.push({
+      x: originX, y: -80,
+      startX: originX, startY: -80,
+      targetX, targetY,
+      t: 0,
+      speed: tier.level === 6 ? 0.014 : 0.018,
+      size: tier.level === 6 ? 15 : 11,
+      color, team, level: tier.level, meteor:true, trail: []
+    });
+    return;
+  }
+
+  // scia di lancio dall'avatar (livelli 2-4)
+  for(let i=0;i<8;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 0.6 + Math.random()*1.6;
+    bursts.push({ x:originX, y:originY, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:1.2+Math.random()*2, life:1, color });
+  }
+
+  projectiles.push({
+    x: originX, y: originY,
+    startX: originX, startY: originY,
+    targetX, targetY,
+    t: 0,
+    speed: 0.05 - tier.level*0.004,           // livelli più alti = leggermente più lenti/pesanti
+    size: 3 + tier.level*1.6,                  // livelli più alti = proiettile più grande
+    color, team, level: tier.level, meteor:false, trail: []
+  });
+}
+
+function spawnSlashes(x, y, count, color){
+  for(let i=0;i<count;i++){
+    slashes.push({
+      x, y,
+      angle: (Math.PI*2/count)*i + Math.random()*0.3,
+      len: 18 + Math.random()*26,
+      life: 1,
+      color
+    });
+  }
+}
+
+let slowMoUntil = 0;
+function triggerSlowMo(ms){ slowMoUntil = performance.now() + ms; }
+
+function showLegendaryCard(){
+  els.legendaryCard.classList.remove('go');
+  void els.legendaryCard.offsetWidth;
+  els.legendaryCard.classList.add('go');
+
+  document.body.classList.add('cinematic');
+  clearTimeout(showLegendaryCard._t);
+  showLegendaryCard._t = setTimeout(() => document.body.classList.remove('cinematic'), 1700);
+}
+
+function legendaryImpact(x, y, color){
+  // raggi che attraversano tutto lo schermo, non solo l'area del colpo
+  const rayCount = 16;
+  const maxLen = Math.hypot(W, H);
+  for(let i=0;i<rayCount;i++){
+    slashes.push({
+      x, y,
+      angle: (Math.PI*2/rayCount)*i,
+      len: maxLen,
+      life: 1,
+      color: i % 2 === 0 ? color : '244,241,234'
+    });
+  }
+
+  // tripla onda d'urto sfalsata
+  shockwaves.push({ x, y, r:4, maxR: 260, life:1, color });
+  setTimeout(() => shockwaves.push({ x, y, r:4, maxR: 340, life:1, color:'244,241,234' }), 90);
+  setTimeout(() => shockwaves.push({ x, y, r:4, maxR: 420, life:1, color }), 180);
+
+  // esplosione densa di scintille
+  for(let i=0;i<90;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 2 + Math.random()*10;
+    impactSparks.push({ x, y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:2+Math.random()*4, life:1, color });
+  }
+
+  screenShake(24);
+  triggerPunch(42);
+  triggerHitstop(140);
+  triggerSlowMo(900);
+  flashScreen();
+  showLegendaryCard();
+}
+
+function epicClash(x, y){
+  const rayCount = 20;
+  const maxLen = Math.hypot(W, H);
+  for(let i=0;i<rayCount;i++){
+    slashes.push({
+      x, y,
+      angle: (Math.PI*2/rayCount)*i,
+      len: maxLen,
+      life: 1,
+      color: i % 3 === 0 ? '244,241,234' : (i % 3 === 1 ? '255,209,102' : '199,125,255')
+    });
+  }
+  shockwaves.push({ x, y, r:4, maxR: 260, life:1, color:'244,241,234' });
+  setTimeout(() => shockwaves.push({ x, y, r:4, maxR: 340, life:1, color:'255,209,102' }), 80);
+  setTimeout(() => shockwaves.push({ x, y, r:4, maxR: 420, life:1, color:'199,125,255' }), 160);
+
+  for(let i=0;i<110;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 2 + Math.random()*11;
+    const color = Math.random() < 0.5 ? '255,209,102' : '199,125,255';
+    impactSparks.push({ x, y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:2+Math.random()*4.5, life:1, color });
+  }
+
+  screenShake(30);
+  triggerPunch(48);
+  triggerHitstop(160);
+  triggerSlowMo(1100);
+  flashScreen();
+  els.legendaryTitle.textContent = 'SCONTRO LEGGENDARIO';
+  showLegendaryCard();
+  setTimeout(() => { els.legendaryTitle.textContent = 'REGALO LEGGENDARIO'; }, 1600);
+}
+
+/* ---------- helper generici per scintille/onde, riusati da tutti i livelli ---------- */
+function spawnSparks(x, y, color, count, maxSpeed){
+  for(let i=0;i<count;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 0.6 + Math.random()*maxSpeed;
+    impactSparks.push({ x, y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:1.2+Math.random()*2.6, life:1, color });
+  }
+}
+function spawnShock(x, y, color, maxR){
+  shockwaves.push({ x, y, r:4, maxR, life:1, color });
+}
+
+/* ---------- LIVELLO 2 — impatto lieve, quasi decorativo ---------- */
+function miniImpact(x, y, color){
+  spawnSparks(x, y, color, 10, 2.5);
+}
+
+/* ---------- LIVELLO 3 — si inizia a sentire ---------- */
+function softImpact(x, y, color){
+  spawnSparks(x, y, color, 22, 4);
+  spawnShock(x, y, color, 90);
+  spawnSlashes(x, y, 5, color);
+  screenShake(4);
+  triggerPunch(8);
+}
+
+/* ---------- LIVELLO 4 — colpo vero, con flash e scossa ---------- */
+function powerImpact(x, y, color){
+  spawnSparks(x, y, color, 40, 6);
+  spawnShock(x, y, color, 190);
+  spawnSlashes(x, y, 9, color);
+  screenShake(12);
+  triggerPunch(22);
+  triggerHitstop(75);
+  flashScreen();
+}
+
+/* ---------- LIVELLO 6 — il colpo più grosso possibile ---------- */
+function mythicImpact(x, y, color){
+  const rayCount = 22;
+  const maxLen = Math.hypot(W, H);
+  for(let i=0;i<rayCount;i++){
+    slashes.push({ x, y, angle:(Math.PI*2/rayCount)*i, len:maxLen, life:1,
+      color: i % 2 === 0 ? color : '244,241,234' });
+  }
+  spawnShock(x, y, color, 300);
+  setTimeout(() => spawnShock(x, y, '244,241,234', 380), 70);
+  setTimeout(() => spawnShock(x, y, color, 460), 140);
+  setTimeout(() => spawnShock(x, y, '244,241,234', 540), 210);
+  spawnSparks(x, y, color, 130, 12);
+
+  screenShake(30);
+  triggerPunch(52);
+  triggerHitstop(180);
+  triggerSlowMo(1300);
+  flashScreen();
+  els.legendaryTitle.textContent = 'REGALO MITICO';
+  showLegendaryCard();
+  setTimeout(() => { els.legendaryTitle.textContent = 'REGALO LEGGENDARIO'; }, 1900);
+}
+
+/* ---------- dispatcher: sceglie l'effetto giusto in base al livello ---------- */
+function resolveImpact(level, x, y, color){
+  registerHeat(level);
+  if(level === 2) miniImpact(x, y, color);
+  else if(level === 3) softImpact(x, y, color);
+  else if(level === 4) powerImpact(x, y, color);
+  else if(level === 5) legendaryImpact(x, y, color);
+  else if(level >= 6) mythicImpact(x, y, color);
+}
+
+/* ---------- scontro in aria tra due livelli qualsiasi ---------- */
+function resolveClash(levelA, levelB, x, y){
+  const top = Math.max(levelA, levelB);
+  registerHeat(top);
+  if(top >= 6){ cosmicClash(x, y); return; }
+  if(top === 5){ epicClash(x, y); return; }
+
+  const big = top >= 4;
+  for(let i=0;i<70;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 1.5 + Math.random()*(big ? 9 : 6);
+    const color = Math.random() < 0.5 ? '255,209,102' : '199,125,255';
+    impactSparks.push({ x, y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:1.5+Math.random()*4, life:1, color });
+  }
+  spawnSlashes(x, y, big ? 14 : 9, '244,241,234');
+  shockwaves.push({ x, y, r:6, maxR: big ? 280 : 160, life:1, color:'244,241,234' });
+  shockwaves.push({ x, y, r:6, maxR: big ? 200 : 120, life:1, color:'255,209,102' });
+  screenShake(big ? 18 : 9);
+  triggerPunch(big ? 34 : 16);
+  triggerHitstop(big ? 100 : 55);
+  flashScreen();
+}
+
+function cosmicClash(x, y){
+  const rayCount = 26;
+  const maxLen = Math.hypot(W, H);
+  for(let i=0;i<rayCount;i++){
+    slashes.push({ x, y, angle:(Math.PI*2/rayCount)*i, len:maxLen, life:1,
+      color: i % 3 === 0 ? '244,241,234' : (i % 3 === 1 ? '255,209,102' : '199,125,255') });
+  }
+  spawnShock(x, y, '244,241,234', 300);
+  setTimeout(() => spawnShock(x, y, '255,209,102', 380), 70);
+  setTimeout(() => spawnShock(x, y, '199,125,255', 460), 140);
+  setTimeout(() => spawnShock(x, y, '244,241,234', 560), 210);
+
+  for(let i=0;i<150;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 2 + Math.random()*13;
+    const color = Math.random() < 0.5 ? '255,209,102' : '199,125,255';
+    impactSparks.push({ x, y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:2+Math.random()*5, life:1, color });
+  }
+
+  screenShake(36);
+  triggerPunch(58);
+  triggerHitstop(200);
+  triggerSlowMo(1400);
+  flashScreen();
+  els.legendaryTitle.textContent = 'SCONTRO MITICO';
+  showLegendaryCard();
+  setTimeout(() => { els.legendaryTitle.textContent = 'REGALO LEGGENDARIO'; }, 2000);
+}
+
+let lightningPhase = 0;
+function drawLightning(){
+  const total = scoreLuce + scoreOmbra;
+  const contested = total === 0 ? 1 : 1 - Math.abs(bgDominance - 0.5)*2; // vicino a 1 quando è punto a punto
+  if(contested < 0.15) return;
+
+  const x1 = W*0.30, y1 = H*0.5;
+  const x2 = W*0.70, y2 = H*0.5;
+  const segments = 9;
+  ctx.save();
+  ctx.globalAlpha = 0.18 + contested*0.35;
+  ctx.strokeStyle = '#fff3d0';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  for(let i=1;i<segments;i++){
+    const t = i/segments;
+    const jitter = (Math.sin(lightningPhase + i*1.7) ) * 14 * contested;
+    ctx.lineTo(x1 + (x2-x1)*t, y1 + (y2-y1)*t + jitter);
+  }
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.restore();
+  lightningPhase += 0.15;
+}
+
+function drawBackgroundWash(){
+  // vignette che si tinge verso il colore dominante
+  const g = ctx.createRadialGradient(W/2, H*0.45, H*0.05, W/2, H*0.45, H*0.75);
+  const luceAlpha = Math.max(0, (bgDominance-0.5)*2) * 0.16;
+  const ombraAlpha = Math.max(0, (0.5-bgDominance)*2) * 0.16;
+  g.addColorStop(0, `rgba(255,209,102,${luceAlpha})`);
+  g.addColorStop(0.5, `rgba(10,7,14,0)`);
+  g.addColorStop(1, `rgba(199,125,255,${ombraAlpha})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+}
+
+let tensionPhase = 0;
+function drawTensionPulse(){
+  const total = scoreLuce + scoreOmbra;
+  if(total < 10) return;
+  const contested = 1 - Math.abs(bgDominance - 0.5)*2;
+  if(contested < 0.6) return;
+
+  tensionPhase += 0.045;
+  const pulse = (Math.sin(tensionPhase) + 1) / 2; // 0..1
+  const alpha = (contested - 0.6) * 0.5 * pulse;
+
+  const g = ctx.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*0.62);
+  g.addColorStop(0, 'rgba(244,241,234,0)');
+  g.addColorStop(1, `rgba(255,209,102,${alpha})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+}
+
+function renderCanvas(){
+  const now = performance.now();
+  const frozen = now < hitstopUntil;
+  const slowMo = now < slowMoUntil;
+  const speedMul = frozen ? 0 : (slowMo ? 0.28 : 1);
+
+  ctx.clearRect(0,0,W,H);
+
+  // base
+  const base = ctx.createLinearGradient(0,0,0,H);
+  base.addColorStop(0, '#160e22');
+  base.addColorStop(0.55, '#0a0714');
+  base.addColorStop(1, '#050308');
+  ctx.fillStyle = base;
+  ctx.fillRect(0,0,W,H);
+
+  drawBackgroundWash();
+  drawTensionPulse();
+  drawLightning();
+
+  // ---------- TEMPESTA: fulmini casuali su tutto lo schermo ----------
+  const inStorm = now < stormUntil;
+  if(inStorm){
+    ctx.fillStyle = 'rgba(6,8,18,0.22)';
+    ctx.fillRect(0,0,W,H);
+    if(speedMul > 0 && now >= stormNextStrike){
+      spawnStormBolt();
+      stormNextStrike = now + 260 + Math.random()*480;
+    }
+  }
+  drawStormBolts(speedMul);
+
+  ambient.forEach(p => {
+    p.y -= p.vy*speedMul; p.x += p.vx*speedMul; p.life -= 0.003*speedMul;
+    ctx.globalAlpha = Math.max(0, p.life*0.8);
+    ctx.fillStyle = `rgb(${p.color})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  });
+  ambient = ambient.filter(p => p.life > 0);
+
+  bursts.forEach(p => {
+    p.x += p.vx*speedMul; p.y += p.vy*speedMul; p.vy += 0.03*speedMul; p.life -= 0.02*speedMul;
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = `rgb(${p.color})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  });
+  bursts = bursts.filter(p => p.life > 0);
+
+  // ---------- proiettili: aggiorna posizione + scia (salta se in hitstop) ----------
+  projectiles.forEach(proj => {
+    if(proj.impacted) return;
+    if(speedMul > 0){
+      proj.t += proj.speed*speedMul;
+      const t = Math.min(1, proj.t);
+      if(proj.meteor){
+        const ease = t*t; // accelera cadendo, come una vera meteora
+        proj.x = proj.startX + (proj.targetX - proj.startX) * ease;
+        proj.y = proj.startY + (proj.targetY - proj.startY) * ease;
+      } else {
+        const arc = Math.sin(t*Math.PI) * 26;
+        proj.x = proj.startX + (proj.targetX - proj.startX) * t;
+        proj.y = proj.startY + (proj.targetY - proj.startY) * t - arc;
+      }
+      proj.trail.push({x:proj.x, y:proj.y});
+      if(proj.trail.length > (proj.meteor ? 16 : 9)) proj.trail.shift();
+
+      // scintille che si staccano dalla meteora mentre cade — stella cadente vera
+      if(proj.meteor && Math.random() < 0.5){
+        bursts.push({
+          x: proj.x + (Math.random()-0.5)*8,
+          y: proj.y,
+          vx: (Math.random()-0.5)*0.8,
+          vy: -0.3 - Math.random()*0.4,
+          r: 1 + Math.random()*2,
+          life: 1,
+          color: proj.color
+        });
+      }
+    }
+  });
+
+  // ---------- scontro a meta' aria ----------
+  if(speedMul > 0){
+    for(let i=0;i<projectiles.length;i++){
+      const a = projectiles[i];
+      if(a.impacted) continue;
+      for(let j=i+1;j<projectiles.length;j++){
+        const b = projectiles[j];
+        if(b.impacted || b.team === a.team) continue;
+        if(Math.abs(a.x-b.x) < 34 && Math.abs(a.y-b.y) < 34){
+          const cx = (a.x+b.x)/2, cy = (a.y+b.y)/2;
+          a.impacted = true; b.impacted = true;
+          resolveClash(a.level, b.level, cx, cy);
+        }
+      }
+    }
+  }
+
+  // ---------- disegno proiettili (scia + corpo) ----------
+  projectiles.forEach(proj => {
+    if(proj.impacted) return;
+
+    proj.trail.forEach((pt, i) => {
+      const a = (i/proj.trail.length) * 0.5;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = `rgb(${proj.color})`;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, proj.size*0.6, 0, Math.PI*2); ctx.fill();
+    });
+
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = `rgb(${proj.color})`;
+    ctx.shadowBlur = proj.level >= 5 ? 22 : (10 + proj.level*2);
+    ctx.shadowColor = `rgb(${proj.color})`;
+    ctx.beginPath(); ctx.arc(proj.x, proj.y, proj.size, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if(speedMul > 0 && proj.t >= 1){
+      proj.impacted = true;
+      if(proj.meteor){
+        registerHeat(proj.level);
+        if(proj.level >= 6) mythicImpact(proj.targetX, proj.targetY, proj.color);
+        else legendaryImpact(proj.targetX, proj.targetY, proj.color);
+      } else {
+        resolveImpact(proj.level, proj.targetX, proj.targetY, proj.color);
+      }
+    }
+  });
+  projectiles = projectiles.filter(p => !p.impacted);
+
+  // ---------- scintille d'impatto ----------
+  impactSparks.forEach(p => {
+    p.x += p.vx*speedMul; p.y += p.vy*speedMul; p.vx *= 0.94; p.vy *= 0.94; p.life -= 0.035*speedMul;
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = `rgb(${p.color})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  });
+  impactSparks = impactSparks.filter(p => p.life > 0);
+
+  // ---------- raggi d'urto a stella ----------
+  slashes.forEach(s => {
+    s.life -= 0.06*speedMul;
+    const grow = (1 - s.life) * s.len;
+    const x1 = s.x + Math.cos(s.angle) * 6;
+    const y1 = s.y + Math.sin(s.angle) * 6;
+    const x2 = s.x + Math.cos(s.angle) * (6 + grow);
+    const y2 = s.y + Math.sin(s.angle) * (6 + grow);
+    ctx.globalAlpha = Math.max(0, s.life);
+    ctx.strokeStyle = `rgb(${s.color})`;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  });
+  slashes = slashes.filter(s => s.life > 0);
+
+  // ---------- onde d'urto ----------
+  shockwaves.forEach(s => {
+    s.r += (s.maxR - s.r) * 0.14 * speedMul;
+    s.life -= 0.035*speedMul;
+    ctx.globalAlpha = Math.max(0, s.life*0.6);
+    ctx.strokeStyle = `rgb(${s.color})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.stroke();
+  });
+  shockwaves = shockwaves.filter(s => s.life > 0);
+
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(renderCanvas);
+}
+renderCanvas();
+
+/* =========================================================================
+   INIT
+========================================================================= */
+window.addEventListener('keydown', (e) => {
+  if(e.key.toLowerCase() === 't'){
+    const nowHidden = els.controlPanel.classList.toggle('hidden');
+    if(nowHidden){
+      els.toggleHint.textContent = '✓ Modalità live — pulsanti di test nascosti';
+      els.toggleHint.classList.remove('hidden');
+      setTimeout(() => { els.toggleHint.classList.add('hidden'); }, 2200);
+    } else {
+      els.toggleHint.textContent = 'Premi "T" per nascondere/mostrare i pulsanti di test';
+      els.toggleHint.classList.remove('hidden');
+    }
+  }
+});
+
+updateBar();
+checkGoal();
+startTimer();
+
+/* =========================================================================
+   COLLEGAMENTO AI REGALI VERI
+   ---------------------------------------------------------------------
+   Si collega al server (server.js) che sta ascoltando la tua live TikTok
+   vera. Ogni volta che arriva un regalo reale, questa funzione chiama
+   handleGiftEvent() esattamente come fanno i pulsanti di test — la
+   differenza è che qui i dati arrivano da uno spettatore vero, non da un
+   click. Si riconnette da sola se la connessione cade.
+========================================================================= */
+function connectToLiveServer(){
+  const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const ws = new WebSocket(protocol + location.host);
+
+  ws.addEventListener('open', () => {
+    console.log('Collegato al server — in ascolto dei regali veri.');
+  });
+
+  ws.addEventListener('message', (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if(data.type === 'gift'){
+        handleGiftEvent(data.team, data.coinValue, data.giftName, data.username);
+      }
+    } catch(e){
+      console.error('Messaggio non valido dal server:', e);
+    }
+  });
+
+  ws.addEventListener('close', () => {
+    console.log('Connessione persa, riprovo tra 3 secondi...');
+    setTimeout(connectToLiveServer, 3000);
+  });
+
+  ws.addEventListener('error', () => ws.close());
+}
+connectToLiveServer();
+</script>
+</body>
+</html>
