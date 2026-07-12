@@ -1,0 +1,17 @@
+{
+  "name": "luce-vs-ombra-battle",
+  "version": "1.0.0",
+  "description": "Overlay battaglia Luce vs Ombra collegato ai regali veri di TikTok LIVE",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.0",
+    "tiktok-live-connector": "^2.0.0"
+  }
+}
